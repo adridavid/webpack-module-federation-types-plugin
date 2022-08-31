@@ -14,14 +14,27 @@ async function downloadRemoteEntryManifest(url: string): Promise<unknown> {
   return JSON.parse(json);
 }
 
-async function downloadRemoteEntryTypes(remoteName: string, dtsUrl: string, dirDownloadedTypes: string): Promise<void> {
+async function downloadRemoteEntryTypes(
+  remoteName: string,
+  remoteLocation: string,
+  dtsUrl: string,
+  dirDownloadedTypes: string
+): Promise<void> {
   const logger = getLogger();
-  const types = (await download(dtsUrl, downloadOptions)).toString();
+  const remoteEntryName = remoteLocation.split("@")[0];
   const outDir = path.join(dirDownloadedTypes, remoteName);
   const outFile = path.join(outDir, 'index.d.ts');
   let shouldWriteFile = true;
 
   mkdirp.sync(outDir);
+
+  let types = (await download(dtsUrl, downloadOptions)).toString();
+  if (remoteName !== remoteEntryName) {
+    types = types.replace(
+      new RegExp(`declare module "${remoteEntryName}(.*)"`, "g"),
+      (_, $1) => `declare module "${remoteName}${$1}"`
+    );
+  }
 
   // Prevent webpack from recompiling the bundle by not writing the file if it has not changed
   if (fs.existsSync(outFile)) {
@@ -94,6 +107,7 @@ export async function downloadTypes(
       const remoteEntryBaseUrl = remoteEntryUrl.split('/').slice(0, -1).join('/');
       const promiseDownload = downloadRemoteEntryTypes(
         remoteName,
+        remoteLocation,
         `${remoteEntryBaseUrl}/${dirEmittedTypes}/index.d.ts`,
         dirDownloadedTypes,
       )
